@@ -7,6 +7,7 @@ export def resolve [options: record = {}]: nothing -> record {
         chip_end: "\u{E0B4}"
         show_git: true
         min_duration_ms: 1000
+        human_readable_duration: true
         newline_before_prompt: true
         multiline: true
         indicator: "\u{276F} "
