@@ -57,11 +57,14 @@ def git-context []: nothing -> record {
         let root = (^git rev-parse --show-toplevel | complete)
         if $root.exit_code != 0 { return {} }
 
+        let root_path = $root.stdout | str trim
+        let relative = $env.PWD | path relative-to $root_path
+
         {
             project: (
-                $root.stdout
-                | str trim
-                | path basename
+                [($root_path | path basename) $relative]
+                | where {|part| $part != "" }
+                | path join
                 | single-line
             )
             branch: (branch-name)
