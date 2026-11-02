@@ -1,0 +1,28 @@
+.{
+    .name = .chips,
+    .version = "0.0.0",
+    .fingerprint = 0x47178cb39977661e,
+    .minimum_zig_version = "0.17.0",
+    .dependencies = .{
+        .libgit2 = .{
+            .url = "git+https://github.com/allyourcodebase/libgit2#71b31daa7dcc9b93fd384c89faaf78ca5e80287c",
+            .hash = "libgit2-1.0.0+1.9.0-uizqTcz9AAA2-MOhcr6sAqboJSRZHMovFy4sobhsOYA8",
+        },
+        .zeit = .{
+            .url = "git+https://github.com/rockorager/zeit?ref=main#06bb7b462b4218770fb5438ebe6b0c0c5ef18888",
+            .hash = "zeit-0.10.0-5I6bkxS-AgAaI3lI3RsXsWnPw7sMCqJKoFnSB8_QRAoo",
+        },
+        .uucode = .{
+            .url = "git+https://github.com/jacobsandlund/uucode?ref=main#1fb73433bba5d93366c57f23ff2e9d7939746500",
+            .hash = "uucode-0.2.0-ZZjBPm6FVgBcY-79AHV8ckQj86z0JwOyVyj89VeZrEiv",
+        },
+    },
+    .paths = .{
+        "build",
+        "build.zig",
+        "build.zig.zon",
+        "src",
+        "LICENSE",
+        "README.md",
+    },
+}

@@ -1,2 +1,5 @@
 .rumdl_cache/
 temp_docs/
+.zig-cache/
+zig-out/
+zig-pkg/

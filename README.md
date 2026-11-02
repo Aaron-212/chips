@@ -1,3 +1,3 @@
-# nuchips
+# chips
 
-An experimental and opinionated prompt engine written in Nu for Nushell.
+An experimental and opinionated prompt engine written in Zig.
