@@ -7,6 +7,6 @@ pub fn render(writer: *std.Io.Writer, allocator: std.mem.Allocator, prompt: []co
     if (prompt.len == 0) return false;
     const label = try paint.singleLine(allocator, prompt);
     defer allocator.free(label);
-    try paint.splitChip(writer, .{ .text = "venv", .fg = .black, .bg = .cyan }, .{ .text = label }, config);
+    try paint.multiChip(writer, &.{ .{ .text = "venv", .fg = .black, .bg = .cyan }, .{ .text = label } }, config);
     return true;
 }

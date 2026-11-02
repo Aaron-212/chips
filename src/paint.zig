@@ -35,12 +35,27 @@ pub fn chip(writer: *std.Io.Writer, segment: Segment, config: Config) std.Io.Wri
     try style(writer, config.chip_end, segment.bg, null);
 }
 
-pub fn splitChip(writer: *std.Io.Writer, left: Segment, right: Segment, config: Config) std.Io.Writer.Error!void {
-    if (!config.color) return writer.print("{s} {s}", .{ left.text, right.text });
-    try style(writer, config.chip_start, left.bg, null);
-    try writer.print("\x1b[0;{d};{d}m{s} \x1b[0m", .{ @backingInt(left.fg), background(left.bg), left.text });
-    try writer.print("\x1b[0;{d};{d}m {s}\x1b[0m", .{ @backingInt(right.fg), background(right.bg), right.text });
-    try style(writer, config.chip_end, right.bg, null);
+pub fn multiChip(writer: *std.Io.Writer, segments: []const Segment, config: Config) std.Io.Writer.Error!void {
+    if (segments.len == 0) return;
+    if (segments.len == 1) return chip(writer, segments[0], config);
+    if (!config.color) {
+        for (segments, 0..) |segment, index| {
+            if (index > 0) try writer.writeByte(' ');
+            try writer.writeAll(segment.text);
+        }
+        return;
+    }
+    try style(writer, config.chip_start, segments[0].bg, null);
+    for (segments, 0..) |segment, index| {
+        try writer.print("\x1b[0;{d};{d}m{s}{s}{s}\x1b[0m", .{
+            @backingInt(segment.fg),
+            background(segment.bg),
+            if (index > 0) " " else "",
+            segment.text,
+            if (index < segments.len - 1) " " else "",
+        });
+    }
+    try style(writer, config.chip_end, segments[segments.len - 1].bg, null);
 }
 
 pub fn style(writer: *std.Io.Writer, value: []const u8, fg: Color, bg: ?Color) std.Io.Writer.Error!void {

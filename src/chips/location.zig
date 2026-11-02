@@ -8,6 +8,9 @@ pub const Repository = struct {
     project: []const u8,
     branch: []const u8,
     status: []const u8,
+    conflicts: usize = 0,
+    operation: ?Operation = null,
+    rebase: ?RebaseProgress = null,
 
     pub fn deinit(self: *Repository, allocator: std.mem.Allocator) void {
         allocator.free(self.project);
@@ -15,6 +18,19 @@ pub const Repository = struct {
         allocator.free(self.status);
         self.* = undefined;
     }
+};
+
+pub const Operation = enum {
+    merge,
+    rebase,
+    cherry_pick,
+    revert,
+    bisect,
+};
+
+pub const RebaseProgress = struct {
+    current: usize,
+    total: usize,
 };
 
 /// Renders directory or repository chips from the supplied location context.
@@ -32,9 +48,9 @@ pub fn render(
             defer allocator.free(project);
             const branch = try paint.singleLine(allocator, repo.branch);
             defer allocator.free(branch);
-            try paint.splitChip(writer, .{ .text = "git", .bg = .magenta }, .{ .text = project }, config);
+            try paint.multiChip(writer, &.{ .{ .text = "git", .bg = .magenta }, .{ .text = project } }, config);
             try writer.writeByte(' ');
-            try paint.splitChip(writer, .{ .text = branch, .bg = .magenta }, .{ .text = repo.status, .bg = .blue }, config);
+            try renderStatus(writer, branch, repo, config);
             return;
         }
     }
@@ -51,9 +67,44 @@ pub fn render(
     try paint.chip(writer, .{ .text = label }, config);
 }
 
+fn renderStatus(writer: *std.Io.Writer, branch: []const u8, repo: Repository, config: Config) !void {
+    var segments: [4]paint.Segment = undefined;
+    segments[0] = .{ .text = branch, .bg = .magenta };
+    segments[1] = .{ .text = repo.status, .bg = .blue };
+    var count: usize = 2;
+    var rebase_buffer: [64]u8 = undefined;
+    if (repo.operation) |operation| {
+        segments[count] = switch (operation) {
+            .merge => .{ .text = "merge", .fg = .black, .bg = .bright_cyan },
+            .rebase => .{
+                .text = if (repo.rebase) |progress|
+                    std.fmt.bufPrint(&rebase_buffer, "rebase: {d}/{d}", .{
+                        progress.current, progress.total,
+                    }) catch unreachable
+                else
+                    "rebase",
+                .bg = .cyan,
+            },
+            .cherry_pick => .{ .text = "cherry-pick", .bg = .magenta },
+            .revert => .{ .text = "revert", .bg = .yellow },
+            .bisect => .{ .text = "bisect" },
+        };
+        count += 1;
+    }
+    var conflict_buffer: [32]u8 = undefined;
+    if (repo.conflicts > 0) {
+        segments[count] = .{
+            .text = std.fmt.bufPrint(&conflict_buffer, "{d}", .{repo.conflicts}) catch unreachable,
+            .bg = .red,
+        };
+        count += 1;
+    }
+    try paint.multiChip(writer, segments[0..count], config);
+}
+
 /// Discovers a worktree from an absolute cwd. Git failures fall back to the directory prompt.
 /// The caller must release a returned snapshot with `Repository.deinit` using the same allocator.
-pub fn read(allocator: std.mem.Allocator, cwd: []const u8) std.mem.Allocator.Error!?Repository {
+pub fn read(allocator: std.mem.Allocator, io: std.Io, cwd: []const u8) std.mem.Allocator.Error!?Repository {
     if (c.git_libgit2_init() < 0) return null;
     defer _ = c.git_libgit2_shutdown();
 
@@ -76,11 +127,47 @@ pub fn read(allocator: std.mem.Allocator, cwd: []const u8) std.mem.Allocator.Err
     errdefer allocator.free(project);
     const branch = try branchName(allocator, repo);
     errdefer allocator.free(branch);
+    const status = try repositoryStatus(allocator, repo);
+    const state = c.git_repository_state(repo);
     return .{
         .project = project,
         .branch = branch,
-        .status = try repositoryStatus(allocator, repo),
+        .status = status.text,
+        .conflicts = status.conflicts,
+        .operation = switch (state) {
+            c.GIT_REPOSITORY_STATE_MERGE => .merge,
+            c.GIT_REPOSITORY_STATE_REBASE, c.GIT_REPOSITORY_STATE_REBASE_INTERACTIVE, c.GIT_REPOSITORY_STATE_REBASE_MERGE => .rebase,
+            c.GIT_REPOSITORY_STATE_CHERRYPICK, c.GIT_REPOSITORY_STATE_CHERRYPICK_SEQUENCE => .cherry_pick,
+            c.GIT_REPOSITORY_STATE_REVERT, c.GIT_REPOSITORY_STATE_REVERT_SEQUENCE => .revert,
+            c.GIT_REPOSITORY_STATE_BISECT => .bisect,
+            else => null,
+        },
+        .rebase = rebaseProgress(io, repo, state),
     };
+}
+
+fn rebaseProgress(io: std.Io, repo: ?*c.git_repository, state: c_int) ?RebaseProgress {
+    const merge_backend = switch (state) {
+        c.GIT_REPOSITORY_STATE_REBASE => false,
+        c.GIT_REPOSITORY_STATE_REBASE_INTERACTIVE, c.GIT_REPOSITORY_STATE_REBASE_MERGE => true,
+        else => return null,
+    };
+    const path = c.git_repository_path(repo);
+    if (path == null) return null;
+    const dir = std.Io.Dir.openDirAbsolute(io, std.mem.span(path), .{}) catch return null;
+    defer dir.close(io);
+    const current = readProgressNumber(io, dir, if (merge_backend) "rebase-merge/msgnum" else "rebase-apply/next") orelse
+        return null;
+    const total = readProgressNumber(io, dir, if (merge_backend) "rebase-merge/end" else "rebase-apply/last") orelse
+        return null;
+    if (current == 0 or total == 0 or current > total) return null;
+    return .{ .current = current, .total = total };
+}
+
+fn readProgressNumber(io: std.Io, dir: std.Io.Dir, path: []const u8) ?usize {
+    var buffer: [32]u8 = undefined;
+    const contents = dir.readFile(io, path, &buffer) catch return null;
+    return std.fmt.parseInt(usize, std.mem.trim(u8, contents, " \t\r\n"), 10) catch null;
 }
 
 fn branchName(allocator: std.mem.Allocator, repo: ?*c.git_repository) std.mem.Allocator.Error![]const u8 {
@@ -117,9 +204,14 @@ fn branchName(allocator: std.mem.Allocator, repo: ?*c.git_repository) std.mem.Al
     return std.fmt.allocPrint(allocator, ":{s}", .{std.mem.span(name)});
 }
 
-fn repositoryStatus(allocator: std.mem.Allocator, repo: ?*c.git_repository) std.mem.Allocator.Error![]const u8 {
+const Status = struct {
+    text: []const u8,
+    conflicts: usize = 0,
+};
+
+fn repositoryStatus(allocator: std.mem.Allocator, repo: ?*c.git_repository) std.mem.Allocator.Error!Status {
     const worktree = try workingTreeStatus(allocator, repo);
-    defer allocator.free(worktree);
+    defer allocator.free(worktree.text);
 
     var stashes: usize = 0;
     if (c.git_stash_foreach(repo, countStash, &stashes) != 0) stashes = 0;
@@ -129,10 +221,13 @@ fn repositoryStatus(allocator: std.mem.Allocator, repo: ?*c.git_repository) std.
     if (stashes > 0) counts.print("${d}", .{stashes}) catch unreachable;
     if (commits.ahead > 0) counts.print("↑{d}", .{commits.ahead}) catch unreachable;
     if (commits.behind > 0) counts.print("↓{d}", .{commits.behind}) catch unreachable;
-    return std.fmt.allocPrint(allocator, "{s}{s}", .{
-        if (counts.end > 0 and std.mem.eql(u8, worktree, "✓")) "" else worktree,
-        counts.buffered(),
-    });
+    return .{
+        .text = try std.fmt.allocPrint(allocator, "{s}{s}", .{
+            if (counts.end > 0 and std.mem.eql(u8, worktree.text, "✓")) "" else worktree.text,
+            counts.buffered(),
+        }),
+        .conflicts = worktree.conflicts,
+    };
 }
 
 fn countStash(_: usize, _: [*c]const u8, _: [*c]const c.git_oid, payload: ?*anyopaque) callconv(.c) c_int {
@@ -161,18 +256,18 @@ fn upstreamCounts(repo: ?*c.git_repository) CommitCounts {
     return counts;
 }
 
-fn workingTreeStatus(allocator: std.mem.Allocator, repo: ?*c.git_repository) std.mem.Allocator.Error![]const u8 {
+fn workingTreeStatus(allocator: std.mem.Allocator, repo: ?*c.git_repository) std.mem.Allocator.Error!Status {
     var options: c.git_status_options = undefined;
     if (c.git_status_options_init(&options, c.GIT_STATUS_OPTIONS_VERSION) != 0)
-        return allocator.dupe(u8, "-");
+        return .{ .text = try allocator.dupe(u8, "-") };
     // Match --untracked-files=normal, without writing the index's stat cache.
     options.flags = c.GIT_STATUS_OPT_INCLUDE_UNTRACKED | c.GIT_STATUS_OPT_RENAMES_HEAD_TO_INDEX |
         c.GIT_STATUS_OPT_RENAMES_INDEX_TO_WORKDIR;
     var list: ?*c.git_status_list = null;
-    if (c.git_status_list_new(&list, repo, &options) != 0) return allocator.dupe(u8, "-");
+    if (c.git_status_list_new(&list, repo, &options) != 0) return .{ .text = try allocator.dupe(u8, "-") };
     defer c.git_status_list_free(list);
 
-    var conflicts = false;
+    var conflicts: usize = 0;
     var staged = false;
     var modified = false;
     var renamed = false;
@@ -187,7 +282,7 @@ fn workingTreeStatus(allocator: std.mem.Allocator, repo: ?*c.git_repository) std
         if (entry == null) continue;
         const flags = entry.*.status;
         if (flags & c.GIT_STATUS_CONFLICTED != 0) {
-            conflicts = true;
+            conflicts += 1;
             continue;
         }
         staged = staged or flags & index_mask != 0;
@@ -196,13 +291,17 @@ fn workingTreeStatus(allocator: std.mem.Allocator, repo: ?*c.git_repository) std
         deleted = deleted or flags & (c.GIT_STATUS_INDEX_DELETED | c.GIT_STATUS_WT_DELETED) != 0;
         untracked = untracked or flags & c.GIT_STATUS_WT_NEW != 0;
     }
-    if (!conflicts and !staged and !modified and !renamed and !deleted and !untracked) return allocator.dupe(u8, "✓");
-    return std.fmt.allocPrint(allocator, "{s}{s}{s}{s}{s}{s}", .{
-        if (conflicts) "↕" else "",
-        if (staged) "+" else "",
-        if (modified) "!" else "",
-        if (renamed) "→" else "",
-        if (deleted) "✗" else "",
-        if (untracked) "?" else "",
-    });
+    if (!staged and !modified and !renamed and !deleted and !untracked) {
+        return .{ .text = try allocator.dupe(u8, if (conflicts > 0) "-" else "✓"), .conflicts = conflicts };
+    }
+    return .{
+        .text = try std.fmt.allocPrint(allocator, "{s}{s}{s}{s}{s}", .{
+            if (staged) "+" else "",
+            if (modified) "!" else "",
+            if (renamed) "→" else "",
+            if (deleted) "✗" else "",
+            if (untracked) "?" else "",
+        }),
+        .conflicts = conflicts,
+    };
 }

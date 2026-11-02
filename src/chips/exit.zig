@@ -7,7 +7,7 @@ pub fn render(writer: *std.Io.Writer, status: i32, config: Config) std.Io.Writer
     if (status == 0) return false;
     var buffer: [32]u8 = undefined;
     const label = signalName(status) orelse (std.fmt.bufPrint(&buffer, "{d}", .{status}) catch unreachable);
-    try paint.splitChip(writer, .{ .text = "exit", .bg = .red }, .{ .text = label }, config);
+    try paint.multiChip(writer, &.{ .{ .text = "exit", .bg = .red }, .{ .text = label } }, config);
     return true;
 }
 

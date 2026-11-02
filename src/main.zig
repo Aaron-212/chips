@@ -83,7 +83,7 @@ pub fn main(init: std.process.Init) !void {
     var clock_buffer: [8]u8 = undefined;
     context.clock = chips.clock.localTime(allocator, init.io, init.environ_map, &clock_buffer);
     const has_left = part == .prompt or part == .left;
-    if (has_left and config.show_git) context.repository = try chips.location.read(allocator, context.cwd);
+    if (has_left and config.show_git) context.repository = try chips.location.read(allocator, init.io, context.cwd);
     defer if (context.repository) |*repository| repository.deinit(allocator);
     if (has_left and config.debug) {
         try chips.render(&stdout.interface, allocator, context, config, .left);
