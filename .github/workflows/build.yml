@@ -51,7 +51,7 @@ jobs:
                       zig-${{ runner.os }}-${{ matrix.target }}-${{ hashFiles('mise.toml', 'build.zig.zon') }}-
 
             - name: Compile
-              run: zig build -Doptimize=ReleaseFast -Dtarget=${{ matrix.target }}
+              run: zig build -Doptimize=ReleaseFast -Dcpu=baseline
 
             - name: Upload binary
               uses: actions/upload-artifact@v7.0.2
