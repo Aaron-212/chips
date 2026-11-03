@@ -36,11 +36,15 @@ jobs:
                       target: aarch64-macos
                       zig_target: ""
                     - runner: ubuntu-latest
+                      target: x86_64-linux-gnu
+                      zig_target: x86_64-linux-gnu
+                    - runner: ubuntu-latest
                       target: x86_64-linux-musl
                       zig_target: x86_64-linux-musl
         env:
             TARGET: ${{ matrix.target }}
             ZIG_TARGET: ${{ matrix.zig_target }}
+            ARCHIVE_NAME: chips-${{ github.ref_name }}-${{ matrix.target }}.tar.gz
         steps:
             - name: Validate version tag
               run: |
@@ -68,7 +72,7 @@ jobs:
             - name: Package binary
               run: |
                   mkdir -p dist
-                  tar -czf "dist/chips-${TARGET}.tar.gz" -C zig-out/bin chips
+                  tar -czf "dist/${ARCHIVE_NAME}" -C zig-out/bin chips
 
             - name: Attest binary and archive
               id: attest
@@ -76,19 +80,19 @@ jobs:
               with:
                   subject-path: |
                       zig-out/bin/chips
-                      dist/chips-${{ matrix.target }}.tar.gz
+                      dist/${{ env.ARCHIVE_NAME }}
 
             - name: Save attestation URL
               env:
                   ATTESTATION_URL: ${{ steps.attest.outputs.attestation-url }}
               run: |
-                  printf -- '- [chips-%s.tar.gz attestation](%s)\n' "$TARGET" "$ATTESTATION_URL" \
-                      > "dist/chips-${TARGET}.md"
+                  printf -- '- [%s attestation](%s)\n' "$ARCHIVE_NAME" "$ATTESTATION_URL" \
+                      > "dist/chips-${RELEASE_TAG}-${TARGET}.md"
 
             - name: Transfer package and attestation URL
               uses: actions/upload-artifact@v7.0.2
               with:
-                  name: release-${{ matrix.target }}
+                  name: release-${{ github.ref_name }}-${{ matrix.target }}
                   path: |
                       dist/*.tar.gz
                       dist/*.md
