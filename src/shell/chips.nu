@@ -28,12 +28,21 @@ def chips-render [part: string, indicator?: string] {
 }
 
 $env.config.render_right_prompt_on_last_line = true
+# Nushell draws these before a background job can push its first update.
+$env.PROMPT_COMMAND = {|| chips-render left }
+$env.PROMPT_COMMAND_RIGHT = {|| chips-render right }
+$env.PROMPT_INDICATOR = {|| chips-render indicator }
+$env.PROMPT_INDICATOR_VI_INSERT = {|| chips-render indicator }
+$env.PROMPT_INDICATOR_VI_NORMAL = {|| chips-render indicator ": " }
+$env.PROMPT_MULTILINE_INDICATOR = "... "
+
 $env.config.hooks.pre_prompt = ($env.config.hooks.pre_prompt | append {||
     if $env.CHIPS_PROMPT_JOB? != null {
         try { job kill $env.CHIPS_PROMPT_JOB }
     }
     $env.CHIPS_PROMPT_JOB = job spawn {
         loop {
+            sleep 1sec
             let left = chips-render left
             let right = chips-render right
             let indicator = chips-render indicator
@@ -44,7 +53,6 @@ $env.config.hooks.pre_prompt = ($env.config.hooks.pre_prompt | append {||
                 --vi-insert $indicator
                 --vi-normal $vi_normal
                 --multiline "... ")
-            sleep 1sec
         }
     }
 })
