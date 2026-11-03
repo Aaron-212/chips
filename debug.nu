@@ -3,7 +3,7 @@ const chips_root = path self | path dirname
 
 do {
     cd $chips_root
-    mise exec -- zig build
+    mise exec -- zig build -Doptimize=ReleaseFast
     if $env.LAST_EXIT_CODE != 0 {
         error make {msg: "Could not build chips; the prompt was not installed."}
     }
@@ -12,7 +12,7 @@ do {
 const chips_binary = $chips_root | path join zig-out bin chips
 
 # Set $env.CHIPS_CONFIG before sourcing, or change it while the prompt is active.
-$env.CHIPS_CONFIG = ($env.CHIPS_CONFIG? | default {debug: true})
+$env.CHIPS_CONFIG = ({debug: true} | merge ($env.CHIPS_CONFIG? | default {}))
 let validation = do {
     ^$chips_binary --part indicator --config ($env.CHIPS_CONFIG | to json --raw)
 } | complete
@@ -30,7 +30,7 @@ def chips-render [part: string, indicator?: string] {
     let status = $env.LAST_EXIT_CODE? | default 0
     let duration = $env.CMD_DURATION_MS? | default 0 | into int
     let columns = try { (term size).columns } catch { 0 }
-    let options = $env.CHIPS_CONFIG? | default {} | to json --raw
+    let options = {debug: true} | merge ($env.CHIPS_CONFIG? | default {}) | to json --raw
     let args = [
         --part
         $part
@@ -63,9 +63,23 @@ def chips-render [part: string, indicator?: string] {
     }
 }
 
-$env.PROMPT_COMMAND = {|| chips-render left }
-$env.PROMPT_COMMAND_RIGHT = {|| chips-render right }
-$env.PROMPT_INDICATOR = {|| chips-render indicator }
-$env.PROMPT_INDICATOR_VI_INSERT = {|| chips-render indicator }
-$env.PROMPT_INDICATOR_VI_NORMAL = {|| chips-render indicator ": " }
-$env.PROMPT_MULTILINE_INDICATOR = "... "
+$env.config.hooks.pre_prompt = ($env.config.hooks.pre_prompt | append {||
+    if $env.CHIPS_PROMPT_JOB? != null {
+        try { job kill $env.CHIPS_PROMPT_JOB }
+    }
+    $env.CHIPS_PROMPT_JOB = job spawn {
+        loop {
+            let left = chips-render left
+            let right = chips-render right
+            let indicator = chips-render indicator
+            let vi_normal = chips-render indicator ": "
+            (commandline set-prompt $left
+                --right $right
+                --indicator $indicator
+                --vi-insert $indicator
+                --vi-normal $vi_normal
+                --multiline "... ")
+            sleep 1sec
+        }
+    }
+})

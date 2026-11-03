@@ -3,7 +3,9 @@ const chips = @import("chips");
 
 const usage =
     \\Usage: chips [OPTIONS]
+    \\       chips _chips {nu|zsh}
     \\Render the chip prompt. Output has no trailing newline after the indicator.
+    \\Use _chips to print a shell integration script.
     \\
     \\  --cwd PATH          Working directory (default: PWD or .)
     \\  --home PATH         Home directory to abbreviate (default: HOME)
@@ -27,6 +29,18 @@ pub fn main(init: std.process.Init) !void {
     const args = try init.minimal.args.toSlice(allocator);
     var stdout_buffer: [4096]u8 = undefined;
     var stdout = std.Io.File.Writer.init(.stdout(), init.io, &stdout_buffer);
+    if (args.len > 1 and std.mem.eql(u8, args[1], "_chips")) {
+        if (args.len != 3) fail(init.io, "expected: chips _chips {{nu|zsh}}", .{});
+        const script = if (std.mem.eql(u8, args[2], "nu"))
+            @embedFile("shell/chips.nu")
+        else if (std.mem.eql(u8, args[2], "zsh"))
+            @embedFile("shell/chips.zsh")
+        else
+            fail(init.io, "unsupported shell: {s} (expected nu or zsh)", .{args[2]});
+        try stdout.interface.writeAll(script);
+        try stdout.interface.flush();
+        return;
+    }
     var context: chips.Context = .{
         .cwd = init.environ_map.get("PWD") orelse try std.process.currentPathAlloc(init.io, allocator),
         .home = init.environ_map.get("HOME") orelse "",

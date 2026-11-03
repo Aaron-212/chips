@@ -52,10 +52,3 @@ jobs:
 
             - name: Compile
               run: zig build -Doptimize=ReleaseFast -Dcpu=baseline
-
-            - name: Upload binary
-              uses: actions/upload-artifact@v7.0.2
-              with:
-                  name: chips-${{ matrix.target }}
-                  path: zig-out/bin/chips
-                  if-no-files-found: error
