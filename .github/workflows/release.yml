@@ -113,22 +113,10 @@ jobs:
 
             - name: Create draft release
               run: |
-                  if draft=$(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft 2>/dev/null); then
-                      if [[ "$draft" != true ]]; then
-                          echo "Release is already published: $RELEASE_TAG" >&2
-                          exit 1
-                      fi
-                  else
-                      args=(--verify-tag --draft --generate-notes)
-                      if [[ "$RELEASE_TAG" == *-* ]]; then
-                          args+=(--prerelease)
-                      fi
-                      gh release create "$RELEASE_TAG" "${args[@]}"
-                  fi
                   notes_file="$RUNNER_TEMP/chips-release-notes.md"
-                  gh release view "$RELEASE_TAG" --json body --jq '.body // ""' |
-                      awk '!/^- \[chips-.*\.tar\.gz attestation\]\(/' > "$notes_file"
-                  printf '\n' >> "$notes_file"
-                  cat dist/*.md >> "$notes_file"
-                  gh release edit "$RELEASE_TAG" --notes-file "$notes_file"
-                  gh release upload "$RELEASE_TAG" --clobber dist/*.tar.gz
+                  cat dist/*.md > "$notes_file"
+                  args=(--verify-tag --draft --generate-notes --notes-file "$notes_file")
+                  if [[ "$RELEASE_TAG" == *-* ]]; then
+                      args+=(--prerelease)
+                  fi
+                  gh release create "$RELEASE_TAG" "${args[@]}" dist/*.tar.gz
