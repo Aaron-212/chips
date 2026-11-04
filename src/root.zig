@@ -7,6 +7,7 @@ const venv = @import("chips/venv.zig");
 pub const Config = @import("config.zig").Config;
 pub const location = @import("chips/location.zig");
 pub const clock = @import("chips/clock.zig");
+pub const ssh = @import("chips/ssh.zig");
 pub const Part = enum { prompt, left, right, indicator };
 
 /// Shell metadata and repository snapshot for one redraw.
@@ -14,6 +15,7 @@ pub const Context = struct {
     cwd: []const u8 = ".",
     home: []const u8 = "",
     venv: []const u8 = "",
+    ssh_session: ?ssh.Session = null,
     status: i32 = 0,
     duration_ms: u64 = 0,
     columns: usize = 0,
@@ -45,6 +47,7 @@ fn renderLeft(writer: *std.Io.Writer, allocator: std.mem.Allocator, context: Con
     if (config.newline_before_prompt) try writer.writeByte('\n');
     var left: std.Io.Writer.Allocating = .init(allocator);
     defer left.deinit();
+    if (try ssh.render(&left.writer, allocator, context.ssh_session, config)) try left.writer.writeByte(' ');
     if (try venv.render(&left.writer, allocator, context.venv, config)) try left.writer.writeByte(' ');
     try location.render(&left.writer, allocator, context.cwd, context.home, context.repository, config);
     try writer.writeAll(left.written());

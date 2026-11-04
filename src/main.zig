@@ -97,6 +97,8 @@ pub fn main(init: std.process.Init) !void {
     var clock_buffer: [8]u8 = undefined;
     context.clock = chips.clock.localTime(allocator, init.io, init.environ_map, &clock_buffer);
     const has_left = part == .prompt or part == .left;
+    var hostname_buffer: [std.posix.HOST_NAME_MAX]u8 = undefined;
+    if (has_left) context.ssh_session = chips.ssh.read(init.environ_map, &hostname_buffer);
     if (has_left and config.show_git) context.repository = try chips.location.read(allocator, init.io, context.cwd);
     defer if (context.repository) |*repository| repository.deinit(allocator);
     if (has_left and config.debug) {
