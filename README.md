@@ -2,6 +2,8 @@
 
 An experimental and opinionated prompt engine written in Zig.
 
+Requires support for powerline symbols.
+
 ## Shell integration
 
 With `chips` on your `PATH`, print the integration script with `chips _chips nu` or `chips _chips zsh`.
