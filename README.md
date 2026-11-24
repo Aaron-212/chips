@@ -6,7 +6,8 @@ Requires support for powerline symbols.
 
 ## Shell integration
 
-With `chips` on your `PATH`, print the integration script with `chips _chips nu` or `chips _chips zsh`.
+With `chips` on your `PATH`, print the integration script with `chips _chips <shell>`.
+Use `nu`, `zsh`, or `bash` for `<shell>`.
 
 For Nushell, generate the script:
 
@@ -35,6 +36,16 @@ For Zsh, add this line to your `.zshrc`:
 source <(chips _chips zsh)
 ```
 
-Restart your shell to load the prompt. Only Nushell and Zsh are supported.
+For Bash, add this line to your `~/.bashrc` after any other prompt setup:
 
-Set `CHIPS_CONFIG` to override prompt options: use a record in Nushell or a JSON string in Zsh.
+```bash
+source <(chips _chips bash)
+```
+
+Bash shows the right-hand chips in multiline mode. Command durations require
+Bash 5.0 or later.
+
+Restart your shell to load the prompt.
+
+Set `CHIPS_CONFIG` to override prompt options. Use a record in Nushell or a JSON
+string in Zsh and Bash.

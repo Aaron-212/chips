@@ -3,7 +3,7 @@ const chips = @import("chips");
 
 const usage =
     \\Usage: chips [OPTIONS]
-    \\       chips _chips {nu|zsh}
+    \\       chips _chips {nu|zsh|bash}
     \\Render the chip prompt. Output has no trailing newline after the indicator.
     \\Use _chips to print a shell integration script.
     \\
@@ -30,13 +30,15 @@ pub fn main(init: std.process.Init) !void {
     var stdout_buffer: [4096]u8 = undefined;
     var stdout = std.Io.File.Writer.init(.stdout(), init.io, &stdout_buffer);
     if (args.len > 1 and std.mem.eql(u8, args[1], "_chips")) {
-        if (args.len != 3) fail(init.io, "expected: chips _chips {{nu|zsh}}", .{});
+        if (args.len != 3) fail(init.io, "expected: chips _chips {{nu|zsh|bash}}", .{});
         const script = if (std.mem.eql(u8, args[2], "nu"))
             @embedFile("shell/chips.nu")
         else if (std.mem.eql(u8, args[2], "zsh"))
             @embedFile("shell/chips.zsh")
+        else if (std.mem.eql(u8, args[2], "bash"))
+            @embedFile("shell/chips.bash")
         else
-            fail(init.io, "unsupported shell: {s} (expected nu or zsh)", .{args[2]});
+            fail(init.io, "unsupported shell: {s} (expected nu, zsh, or bash)", .{args[2]});
         try stdout.interface.writeAll(script);
         try stdout.interface.flush();
         return;
