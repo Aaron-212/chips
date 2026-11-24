@@ -28,7 +28,7 @@ def chips-render [part: string, indicator?: string] {
 }
 
 $env.config.render_right_prompt_on_last_line = true
-# Nushell draws these before a background job can push its first update.
+# Nushell uses these closures when it draws a new prompt.
 $env.PROMPT_COMMAND = {|| chips-render left }
 $env.PROMPT_COMMAND_RIGHT = {|| chips-render right }
 $env.PROMPT_INDICATOR = {|| chips-render indicator }
@@ -40,19 +40,23 @@ $env.config.hooks.pre_prompt = ($env.config.hooks.pre_prompt | append {||
     if $env.CHIPS_PROMPT_JOB? != null {
         try { job kill $env.CHIPS_PROMPT_JOB }
     }
-    $env.CHIPS_PROMPT_JOB = job spawn {
-        loop {
-            sleep 1sec
-            let left = chips-render left
-            let right = chips-render right
-            let indicator = chips-render indicator
-            let vi_normal = chips-render indicator ": "
-            (commandline set-prompt $left
-                --right $right
-                --indicator $indicator
-                --vi-insert $indicator
-                --vi-normal $vi_normal
-                --multiline "... ")
+    $env.CHIPS_PROMPT_JOB = if $env.CHIPS_BACKGROUND_REFRESH? == true {
+        job spawn {
+            loop {
+                sleep 1sec
+                let left = chips-render left
+                let right = chips-render right
+                let indicator = chips-render indicator
+                let vi_normal = chips-render indicator ": "
+                (commandline set-prompt $left
+                    --right $right
+                    --indicator $indicator
+                    --vi-insert $indicator
+                    --vi-normal $vi_normal
+                    --multiline "... ")
+            }
         }
+    } else {
+        null
     }
 })

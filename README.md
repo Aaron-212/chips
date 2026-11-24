@@ -22,6 +22,13 @@ source chips.nu
 
 Regenerate `chips.nu` after upgrading chips.
 
+The Nushell prompt refreshes when it returns after a command. To also refresh it
+every second while you type or wait, add this to `config.nu`:
+
+```nu
+$env.CHIPS_BACKGROUND_REFRESH = true
+```
+
 For Zsh, add this line to your `.zshrc`:
 
 ```zsh
